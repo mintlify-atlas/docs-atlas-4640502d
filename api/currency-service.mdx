@@ -1,0 +1,98 @@
+---
+title: "CurrencyService"
+description: "Lists supported currencies and converts monetary amounts between currency codes."
+---
+
+## Overview
+
+`CurrencyService` provides currency data used by the frontend to let users view prices in their preferred currency. It exposes two RPCs: one to fetch all supported currency codes, and one to convert a `Money` value from one currency to another.
+
+```protobuf
+service CurrencyService {
+    rpc GetSupportedCurrencies(Empty) returns (GetSupportedCurrenciesResponse) {}
+    rpc Convert(CurrencyConversionRequest) returns (Money) {}
+}
+```
+
+---
+
+## GetSupportedCurrencies
+
+Returns all currency codes supported for display and conversion. Takes no input parameters.
+
+### Request
+
+Accepts an `Empty` message — no fields required.
+
+### Response — `GetSupportedCurrenciesResponse`
+
+<ResponseField name="currency_codes" type="string[]">
+  A list of 3-letter ISO 4217 currency codes supported by the service (e.g., `"USD"`, `"EUR"`, `"JPY"`).
+</ResponseField>
+
+---
+
+## Convert
+
+Converts a monetary amount from one currency to another. Called by `CheckoutService` and the frontend when displaying prices in the user's chosen currency.
+
+### Request — `CurrencyConversionRequest`
+
+<ParamField body="from" type="Money" required>
+  The monetary amount to convert, including its source currency.
+
+  <Expandable title="Money properties">
+    <ParamField body="currency_code" type="string" required>
+      The 3-letter ISO 4217 source currency code (e.g., `"USD"`).
+    </ParamField>
+    <ParamField body="units" type="int64" required>
+      The whole units of the amount. For example, `17` for $17.99.
+    </ParamField>
+    <ParamField body="nanos" type="int32" required>
+      The fractional units in nanoseconds (10^-9). Range: -999,999,999 to +999,999,999. For $17.99, `nanos=990000000`. The sign of `nanos` must match the sign of `units` when `units` is nonzero.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="to_code" type="string" required>
+  The 3-letter ISO 4217 target currency code to convert into (e.g., `"EUR"`).
+</ParamField>
+
+### Response — `Money`
+
+Returns the converted amount as a `Money` message with `currency_code` set to the value of `to_code`.
+
+<ResponseField name="currency_code" type="string">
+  The 3-letter ISO 4217 currency code of the converted amount.
+</ResponseField>
+
+<ResponseField name="units" type="int64">
+  The whole units of the converted amount.
+</ResponseField>
+
+<ResponseField name="nanos" type="int32">
+  The fractional units in nanoseconds (10^-9). Range: -999,999,999 to +999,999,999.
+</ResponseField>
+
+---
+
+## Message types
+
+### `Money`
+
+Represents an amount of money with its currency type. Used throughout the Cymbal Shops API wherever monetary values appear.
+
+| Field | Type | Description |
+|---|---|---|
+| `currency_code` | `string` | 3-letter ISO 4217 currency code (e.g., `"USD"`) |
+| `units` | `int64` | Whole units of the amount (e.g., `17` for $17.99) |
+| `nanos` | `int32` | Fractional units in nanoseconds (10^-9). Range: -999,999,999 to +999,999,999 |
+
+The sign of `nanos` must match the sign of `units` unless `units` is zero. For example, -$1.75 is represented as `units=-1`, `nanos=-750000000`.
+
+### `CurrencyConversionRequest`
+
+| Field | Type | Description |
+|---|---|---|
+| `from` | `Money` | The amount to convert, with its source currency |
+| `to_code` | `string` | The 3-letter ISO 4217 target currency code |

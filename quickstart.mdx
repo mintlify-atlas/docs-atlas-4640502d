@@ -1,80 +1,146 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Deploy Cymbal Shops to Google Kubernetes Engine (GKE) in minutes using pre-built Kubernetes manifests."
 ---
 
-## Get started in three steps
+## Prerequisites
 
-Get your documentation site running locally and make your first customization.
+Before you begin, make sure the following tools are installed and configured:
 
-### Step 1: Set up your local environment
+- **`gcloud`** — [Google Cloud CLI](https://cloud.google.com/sdk/docs/install). Used to create and manage GKE clusters.
+- **`kubectl`** — [Kubernetes CLI](https://kubernetes.io/docs/tasks/tools/). Install via `gcloud components install kubectl`.
+- **`git`** — Required to clone the repository.
+- A [Google Cloud project](https://cloud.google.com/resource-manager/docs/creating-managing-projects#creating_a_project) with billing enabled.
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+<Note>
+  All shell commands below assume you are running in a Bash-compatible shell with `gcloud` authenticated. Run `gcloud auth login` first if you have not already.
+</Note>
 
-### Step 2: Deploy your changes
+## Deploy to GKE
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+<Steps>
+  <Step title="Clone the repository">
+    Clone the latest stable release of the repository. The `--depth 1` flag skips downloading the full git history, making the clone faster.
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    ```sh
+    git clone --depth 1 --branch v0 https://github.com/GoogleCloudPlatform/microservices-demo.git
+    cd microservices-demo/
+    ```
+  </Step>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+  <Step title="Set your project and region">
+    Export your Google Cloud project ID and the region where you want to create the cluster, then enable the Kubernetes Engine API.
 
-### Step 3: Go live
+    ```sh
+    export PROJECT_ID=<PROJECT_ID>
+    export REGION=us-central1
+    gcloud services enable container.googleapis.com \
+      --project=${PROJECT_ID}
+    ```
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    Replace `<PROJECT_ID>` with your actual Google Cloud project ID. You can find it in the [Google Cloud Console](https://console.cloud.google.com/) or by running `gcloud projects list`.
+
+    <Tip>
+      `us-central1` is a good default region. See [GKE regions and zones](https://cloud.google.com/compute/docs/regions-zones) to choose a region closer to your users.
+    </Tip>
+  </Step>
+
+  <Step title="Create a GKE Autopilot cluster">
+    Create a GKE Autopilot cluster named `online-boutique`. Autopilot manages node provisioning automatically, so you pay only for the resources your pods actually use.
+
+    ```sh
+    gcloud container clusters create-auto online-boutique \
+      --project=${PROJECT_ID} --region=${REGION}
+    ```
+
+    <Note>
+      Cluster creation typically takes 3–5 minutes. `create-auto` provisions an Autopilot cluster. To use a Standard cluster instead, replace `create-auto` with `create`.
+    </Note>
+  </Step>
+
+  <Step title="Deploy Cymbal Shops">
+    Apply the pre-built Kubernetes manifests to deploy all 11 microservices to your cluster.
+
+    ```sh
+    kubectl apply -f ./release/kubernetes-manifests.yaml
+    ```
+  </Step>
+
+  <Step title="Wait for pods to be ready">
+    Check pod status until all pods show `Running`. This usually takes 2–4 minutes after deployment.
+
+    ```sh
+    kubectl get pods
+    ```
+
+    When all services are healthy, you will see output similar to the following:
+
+    ```
+    NAME                                     READY   STATUS    RESTARTS   AGE
+    adservice-76bdd69666-ckc5j               1/1     Running   0          2m58s
+    cartservice-66d497c6b7-dp5jr             1/1     Running   0          2m59s
+    checkoutservice-666c784bd6-4jd22         1/1     Running   0          3m1s
+    currencyservice-5d5d496984-4jmd7         1/1     Running   0          2m59s
+    emailservice-667457d9d6-75jcq            1/1     Running   0          3m2s
+    frontend-6b8d69b9fb-wjqdg                1/1     Running   0          3m1s
+    loadgenerator-665b5cd444-gwqdq           1/1     Running   0          3m
+    paymentservice-68596d6dd6-bf6bv          1/1     Running   0          3m
+    productcatalogservice-557d474574-888kr   1/1     Running   0          3m
+    recommendationservice-69c56b74d4-7z8r5   1/1     Running   0          3m1s
+    redis-cart-5f59546cdd-5jnqf              1/1     Running   0          2m58s
+    shippingservice-6ccc89f8fd-v686r         1/1     Running   0          2m58s
+    ```
+
+    <Tip>
+      Run `kubectl get pods --watch` to stream pod status updates in real time instead of polling manually.
+    </Tip>
+  </Step>
+
+  <Step title="Get the external IP and open the frontend">
+    Retrieve the external IP address assigned to the frontend load balancer service.
+
+    ```sh
+    kubectl get service frontend-external | awk '{print $4}'
+    ```
+
+    Once the command returns an IP address (not `<pending>`), open `http://EXTERNAL_IP` in your browser to access the Cymbal Shops storefront.
+
+    <Warning>
+      If the output shows `<pending>`, the load balancer is still being provisioned. Wait 30–60 seconds and run the command again.
+    </Warning>
+  </Step>
+
+  <Step title="Clean up when you are done">
+    To avoid ongoing charges, delete the GKE cluster when you no longer need it.
+
+    ```sh
+    gcloud container clusters delete online-boutique \
+      --project=${PROJECT_ID} --region=${REGION}
+    ```
+
+    Deletion typically takes a few minutes. This removes all cluster resources including the load balancer and persistent volumes.
+
+    <Warning>
+      Deleting the cluster is irreversible. Make sure you no longer need any data or configuration stored in the cluster before running this command.
+    </Warning>
+  </Step>
+</Steps>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
+Now that Cymbal Shops is running, explore the full deployment options and architecture:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Architecture overview" icon="sitemap" href="/architecture/overview">
+    Understand how the 11 microservices communicate over gRPC and how traffic flows through the system.
+  </Card>
+  <Card title="Kustomize variations" icon="puzzle-piece" href="/deployment/kustomize">
+    Deploy variations of Cymbal Shops with Istio, Cloud Operations tracing, Spanner, Memorystore, and more.
+  </Card>
+  <Card title="Helm deployment" icon="helm" href="/deployment/helm">
+    Package and deploy the full application using the official Helm chart.
+  </Card>
+  <Card title="Terraform deployment" icon="layer-group" href="/deployment/terraform">
+    Provision GKE infrastructure and deploy Cymbal Shops as code using Terraform.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

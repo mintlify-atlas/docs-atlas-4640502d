@@ -1,0 +1,160 @@
+---
+title: "ProductCatalogService"
+description: "Serves the product catalog. Supports listing all products, fetching a single product by ID, and searching by keyword."
+---
+
+## Overview
+
+`ProductCatalogService` is a read-only service that loads product data from a JSON file at startup. It exposes three RPCs for the frontend and recommendation service to query the catalog.
+
+```protobuf
+service ProductCatalogService {
+    rpc ListProducts(Empty) returns (ListProductsResponse) {}
+    rpc GetProduct(GetProductRequest) returns (Product) {}
+    rpc SearchProducts(SearchProductsRequest) returns (SearchProductsResponse) {}
+}
+```
+
+---
+
+## ListProducts
+
+Returns the full product catalog. Takes no input parameters.
+
+### Request
+
+Accepts an `Empty` message — no fields required.
+
+### Response — `ListProductsResponse`
+
+<ResponseField name="products" type="Product[]">
+  The complete list of products in the catalog.
+
+  <Expandable title="Product properties">
+    <ResponseField name="id" type="string">
+      Unique product identifier.
+    </ResponseField>
+    <ResponseField name="name" type="string">
+      Display name of the product.
+    </ResponseField>
+    <ResponseField name="description" type="string">
+      Full product description.
+    </ResponseField>
+    <ResponseField name="picture" type="string">
+      Path to the product image file.
+    </ResponseField>
+    <ResponseField name="price_usd" type="Money">
+      The product price in USD.
+
+      <Expandable title="Money properties">
+        <ResponseField name="currency_code" type="string">
+          The 3-letter ISO 4217 currency code. Always `"USD"` for catalog prices.
+        </ResponseField>
+        <ResponseField name="units" type="int64">
+          The whole dollar amount (e.g., `17` for $17.99).
+        </ResponseField>
+        <ResponseField name="nanos" type="int32">
+          The fractional cents in nanoseconds (10^-9). For example, `$17.99` is `units=17`, `nanos=990000000`.
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    <ResponseField name="categories" type="string[]">
+      Tags such as `"clothing"` or `"kitchen"` used to find related products.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## GetProduct
+
+Fetches a single product by its unique ID.
+
+### Request — `GetProductRequest`
+
+<ParamField body="id" type="string" required>
+  The unique identifier of the product to retrieve.
+</ParamField>
+
+### Response — `Product`
+
+<ResponseField name="id" type="string">
+  Unique product identifier.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Display name of the product.
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Full product description.
+</ResponseField>
+
+<ResponseField name="picture" type="string">
+  Path to the product image file.
+</ResponseField>
+
+<ResponseField name="price_usd" type="Money">
+  The product price in USD.
+
+  <Expandable title="Money properties">
+    <ResponseField name="currency_code" type="string">
+      The 3-letter ISO 4217 currency code. Always `"USD"` for catalog prices.
+    </ResponseField>
+    <ResponseField name="units" type="int64">
+      The whole dollar amount.
+    </ResponseField>
+    <ResponseField name="nanos" type="int32">
+      The fractional cents in nanoseconds (10^-9). Must be between -999,999,999 and +999,999,999.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="categories" type="string[]">
+  Category tags for related product lookups (e.g., `"clothing"`, `"kitchen"`).
+</ResponseField>
+
+---
+
+## SearchProducts
+
+Searches the catalog for products matching a keyword query.
+
+### Request — `SearchProductsRequest`
+
+<ParamField body="query" type="string" required>
+  The search keyword or phrase. Matched against product names and descriptions.
+</ParamField>
+
+### Response — `SearchProductsResponse`
+
+<ResponseField name="results" type="Product[]">
+  The list of products matching the query. Uses the same `Product` structure as `GetProduct`.
+</ResponseField>
+
+---
+
+## Message types
+
+### `Product`
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Unique product identifier |
+| `name` | `string` | Display name |
+| `description` | `string` | Full product description |
+| `picture` | `string` | Image file path |
+| `price_usd` | `Money` | Price in USD |
+| `categories` | `repeated string` | Category tags |
+
+### `Money`
+
+Represents a monetary amount with its currency.
+
+| Field | Type | Description |
+|---|---|---|
+| `currency_code` | `string` | 3-letter ISO 4217 currency code (e.g., `"USD"`) |
+| `units` | `int64` | Whole units of the amount (e.g., `17` for $17.99) |
+| `nanos` | `int32` | Fractional units in nanoseconds (10^-9). Range: -999,999,999 to +999,999,999. For $17.99, `nanos=990000000`. |
+
+The sign of `nanos` must match the sign of `units`, unless `units` is zero. For example, -$1.75 is represented as `units=-1`, `nanos=-750000000`.

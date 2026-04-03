@@ -1,0 +1,154 @@
+---
+title: "ShippingService"
+description: "Provides shipping cost estimates and simulates order fulfillment by generating tracking IDs. This is a mock service."
+---
+
+## Overview
+
+`ShippingService` exposes two RPCs used during checkout. `GetQuote` estimates the shipping cost before the user confirms their order. `ShipOrder` finalizes the shipment and returns a tracking ID. Both are mock implementations — no real shipments are created.
+
+```protobuf
+service ShippingService {
+    rpc GetQuote(GetQuoteRequest) returns (GetQuoteResponse) {}
+    rpc ShipOrder(ShipOrderRequest) returns (ShipOrderResponse) {}
+}
+```
+
+---
+
+## GetQuote
+
+Returns an estimated shipping cost for a given address and list of cart items. Called by `frontend` when rendering the cart page to show an estimated shipping cost before the user confirms their order.
+
+### Request — `GetQuoteRequest`
+
+<ParamField body="address" type="Address" required>
+  The destination shipping address.
+
+  <Expandable title="Address properties">
+    <ParamField body="street_address" type="string" required>
+      Street number and name.
+    </ParamField>
+    <ParamField body="city" type="string" required>
+      City name.
+    </ParamField>
+    <ParamField body="state" type="string" required>
+      State or province.
+    </ParamField>
+    <ParamField body="country" type="string" required>
+      Country name.
+    </ParamField>
+    <ParamField body="zip_code" type="int32" required>
+      Postal or ZIP code.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="items" type="repeated CartItem" required>
+  The items to be shipped. Used to calculate the shipping cost.
+
+  <Expandable title="CartItem properties">
+    <ParamField body="product_id" type="string" required>
+      Unique product identifier.
+    </ParamField>
+    <ParamField body="quantity" type="int32" required>
+      Number of units of this product.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Response — `GetQuoteResponse`
+
+<ResponseField name="cost_usd" type="Money">
+  The estimated shipping cost in USD.
+
+  <Expandable title="Money properties">
+    <ResponseField name="currency_code" type="string">
+      The 3-letter ISO 4217 currency code. Always `"USD"` for quotes.
+    </ResponseField>
+    <ResponseField name="units" type="int64">
+      The whole dollar amount of the shipping cost.
+    </ResponseField>
+    <ResponseField name="nanos" type="int32">
+      The fractional cents in nanoseconds (10^-9). Range: -999,999,999 to +999,999,999.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## ShipOrder
+
+Confirms the shipment and returns a tracking ID. Called by `CheckoutService` after a successful payment.
+
+### Request — `ShipOrderRequest`
+
+<ParamField body="address" type="Address" required>
+  The destination shipping address.
+
+  <Expandable title="Address properties">
+    <ParamField body="street_address" type="string" required>
+      Street number and name.
+    </ParamField>
+    <ParamField body="city" type="string" required>
+      City name.
+    </ParamField>
+    <ParamField body="state" type="string" required>
+      State or province.
+    </ParamField>
+    <ParamField body="country" type="string" required>
+      Country name.
+    </ParamField>
+    <ParamField body="zip_code" type="int32" required>
+      Postal or ZIP code.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="items" type="repeated CartItem" required>
+  The items to be shipped.
+
+  <Expandable title="CartItem properties">
+    <ParamField body="product_id" type="string" required>
+      Unique product identifier.
+    </ParamField>
+    <ParamField body="quantity" type="int32" required>
+      Number of units of this product.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Response — `ShipOrderResponse`
+
+<ResponseField name="tracking_id" type="string">
+  A unique tracking identifier for the shipment. Included in the order result and the confirmation email.
+</ResponseField>
+
+---
+
+## Message types
+
+### `Address`
+
+| Field | Type | Description |
+|---|---|---|
+| `street_address` | `string` | Street number and name |
+| `city` | `string` | City name |
+| `state` | `string` | State or province |
+| `country` | `string` | Country name |
+| `zip_code` | `int32` | Postal or ZIP code |
+
+### `CartItem`
+
+| Field | Type | Description |
+|---|---|---|
+| `product_id` | `string` | Unique product identifier |
+| `quantity` | `int32` | Number of units |
+
+### `Money`
+
+| Field | Type | Description |
+|---|---|---|
+| `currency_code` | `string` | 3-letter ISO 4217 currency code |
+| `units` | `int64` | Whole units of the amount |
+| `nanos` | `int32` | Fractional units in nanoseconds (10^-9) |

@@ -1,0 +1,90 @@
+---
+title: "gRPC API overview"
+description: "All inter-service communication in Cymbal Shops uses gRPC and Protocol Buffers. This reference documents every service, RPC, and message type."
+---
+
+## How it works
+
+Cymbal Shops services communicate exclusively over [gRPC](https://grpc.io) using strongly-typed [Protocol Buffers](https://protobuf.dev) (proto3). The single source of truth for all API contracts is the proto file at `protos/demo.proto` in the repository root.
+
+Each service exposes a well-defined gRPC interface. The frontend service acts as the gateway, translating HTTP requests from the browser into gRPC calls to the backend services. All other services communicate directly with each other via gRPC.
+
+## Services
+
+| Service | RPCs | Description |
+|---|---|---|
+| CartService | 3 | Manages per-user shopping cart state stored in Redis |
+| CheckoutService | 1 | Orchestrates the full checkout flow across multiple services |
+| ProductCatalogService | 3 | Serves product listings, lookups, and search |
+| RecommendationService | 1 | Returns product recommendations based on the current cart |
+| ShippingService | 2 | Provides shipping quotes and generates tracking IDs (mock) |
+| CurrencyService | 2 | Lists supported currencies and converts monetary amounts |
+| PaymentService | 1 | Processes credit card charges (mock) |
+| EmailService | 1 | Sends order confirmation emails (mock) |
+| AdService | 1 | Serves contextual advertisements based on page keywords |
+
+## Generating client code
+
+Use the `protoc` compiler with the appropriate language plugin to generate gRPC client stubs from `protos/demo.proto`.
+
+<CodeGroup>
+
+```bash Go
+protoc \
+  --go_out=. \
+  --go_opt=paths=source_relative \
+  --go-grpc_out=. \
+  --go-grpc_opt=paths=source_relative \
+  protos/demo.proto
+```
+
+```bash Python
+python -m grpc_tools.protoc \
+  -I. \
+  --python_out=. \
+  --grpc_python_out=. \
+  protos/demo.proto
+```
+
+```bash Node.js
+grpc_tools_node_protoc \
+  --js_out=import_style=commonjs,binary:. \
+  --grpc_out=grpc_js:. \
+  protos/demo.proto
+```
+
+</CodeGroup>
+
+The proto file uses the `hipstershop` package and the Go package path `github.com/GoogleCloudPlatform/microservices-demo/hipstershop`.
+
+## Service pages
+
+<CardGroup cols={2}>
+  <Card title="CartService" icon="cart-shopping" href="/api/cart-service">
+    Add items, retrieve, and clear a user's shopping cart
+  </Card>
+  <Card title="CheckoutService" icon="bag-shopping" href="/api/checkout-service">
+    Place orders and coordinate payment, shipping, and email
+  </Card>
+  <Card title="ProductCatalogService" icon="list" href="/api/product-catalog-service">
+    List, look up, and search the product catalog
+  </Card>
+  <Card title="RecommendationService" icon="thumbs-up" href="/api/recommendation-service">
+    Get product recommendations for a given user and cart
+  </Card>
+  <Card title="ShippingService" icon="truck" href="/api/shipping-service">
+    Get shipping quotes and ship orders
+  </Card>
+  <Card title="CurrencyService" icon="money-bill" href="/api/currency-service">
+    List supported currencies and convert monetary amounts
+  </Card>
+  <Card title="PaymentService" icon="credit-card" href="/api/payment-service">
+    Charge a credit card for a given amount
+  </Card>
+  <Card title="EmailService" icon="envelope" href="/api/email-service">
+    Send order confirmation emails
+  </Card>
+  <Card title="AdService" icon="rectangle-ad" href="/api/ad-service">
+    Retrieve contextual ads for page keywords
+  </Card>
+</CardGroup>

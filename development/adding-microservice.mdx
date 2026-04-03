@@ -1,0 +1,220 @@
+---
+title: 'Adding a new microservice'
+description: 'Extend Cymbal Shops with an optional microservice by following this eight-step checklist.'
+keywords: ['microservice', 'skaffold', 'kustomize', 'helm', 'kubernetes', 'dockerfile']
+---
+
+The core set of Cymbal Shops microservices is stable and unlikely to change, but the architecture is designed to accept optional services that complement the defaults. The `shopping-assistant` service in `src/shoppingassistantservice/` is a working example you can reference throughout these steps.
+
+<Steps>
+  <Step title="Create a source directory">
+    Create a new directory under `src/` using your service's name:
+
+    ```bash
+    mkdir src/myservice
+    ```
+
+    Follow the conventions of existing services. A Python-based service should include at minimum:
+
+    <Tree>
+      <Tree.Folder name="src/myservice" defaultOpen>
+        <Tree.File name="Dockerfile" />
+        <Tree.File name="main.py" />
+        <Tree.File name="requirements.in" />
+        <Tree.File name="requirements.txt" />
+        <Tree.File name="README.md" />
+      </Tree.Folder>
+    </Tree>
+
+    Browse the existing services under `src/` for structural guidance.
+  </Step>
+
+  <Step title="Add your source code">
+    Place your application code inside `src/myservice/`. Your service should expose an HTTP or gRPC endpoint that other services in the mesh can call. Follow the patterns of an existing service that uses the same language or framework.
+
+    Refer to `src/shoppingassistantservice/shoppingassistantservice.py` as an example of a Python service that integrates with the rest of the application.
+  </Step>
+
+  <Step title="Create a Dockerfile">
+    Add a `Dockerfile` to your service directory. Use a multi-stage build to keep the final image small. The example below mirrors the pattern used by `src/shoppingassistantservice/Dockerfile`:
+
+    ```dockerfile Dockerfile
+    ARG BUILDPLATFORM=linux/amd64
+
+    FROM --platform=$BUILDPLATFORM python:3.12-slim AS base
+
+    FROM base AS builder
+    RUN apt-get -qq update \
+        && apt-get install -y --no-install-recommends g++ \
+        && rm -rf /var/lib/apt/lists/*
+
+    COPY requirements.txt .
+    RUN pip install -r requirements.txt
+
+    FROM base
+    ENV PYTHONUNBUFFERED=1
+    WORKDIR /myservice
+
+    COPY --from=builder /usr/local/lib/python3.12/ /usr/local/lib/python3.12/
+    COPY . .
+
+    ENV PORT "8080"
+    EXPOSE 8080
+
+    ENTRYPOINT ["python", "main.py"]
+    ```
+
+    Key points:
+    - Pin the base image to a specific digest in production for reproducibility.
+    - Set `EXPOSE` to the port your service listens on.
+    - Use a non-root user where possible (see `securityContext` in the Kubernetes manifest).
+  </Step>
+
+  <Step title="Create Kubernetes manifests">
+    Create a directory for your service under `kustomize/components/`:
+
+    ```bash
+    mkdir kustomize/components/myservice
+    ```
+
+    Add a `myservice.yaml` file containing a `Deployment`, a `Service`, and (if using Workload Identity) a `ServiceAccount`. The structure below is based on `kustomize/components/shopping-assistant/shoppingassistantservice.yaml`:
+
+    ```yaml kustomize/components/myservice/myservice.yaml
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: myservice
+      labels:
+        app: myservice
+    spec:
+      selector:
+        matchLabels:
+          app: myservice
+      template:
+        metadata:
+          labels:
+            app: myservice
+        spec:
+          terminationGracePeriodSeconds: 5
+          securityContext:
+            fsGroup: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+            runAsUser: 1000
+          containers:
+          - name: server
+            image: myservice
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - ALL
+              privileged: false
+            ports:
+            - name: http
+              containerPort: 8080
+            resources:
+              requests:
+                cpu: 100m
+                memory: 64Mi
+              limits:
+                cpu: 200m
+                memory: 128Mi
+    ---
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: myservice
+      labels:
+        app: myservice
+    spec:
+      type: ClusterIP
+      selector:
+        app: myservice
+      ports:
+      - name: http
+        port: 80
+        targetPort: 8080
+    ```
+
+    <Note>
+      The `image` field uses a short name (e.g. `myservice`). Skaffold resolves this to the full registry path at build time using the `--default-repo` flag.
+    </Note>
+  </Step>
+
+  <Step title="Add a kustomization.yaml for your component">
+    Create `kustomize/components/myservice/kustomization.yaml`. This file registers your manifest as a Kustomize component and can include patches to other deployments if your service requires configuration changes elsewhere in the cluster.
+
+    The example below mirrors `kustomize/components/shopping-assistant/kustomization.yaml`:
+
+    ```yaml kustomize/components/myservice/kustomization.yaml
+    apiVersion: kustomize.config.k8s.io/v1alpha1
+    kind: Component
+    resources:
+    - myservice.yaml
+    ```
+
+    If your service requires an environment variable to be set on an existing deployment (for example, to enable a feature flag on the `frontend`), add a patch block:
+
+    ```yaml kustomize/components/myservice/kustomization.yaml
+    apiVersion: kustomize.config.k8s.io/v1alpha1
+    kind: Component
+    resources:
+    - myservice.yaml
+    patches:
+    - patch: |-
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: frontend
+        spec:
+          template:
+            spec:
+              containers:
+              - name: server
+                env:
+                - name: MYSERVICE_ADDR
+                  value: "myservice:80"
+    ```
+  </Step>
+
+  <Step title="Register the component in the root kustomization.yaml">
+    Open `kustomize/kustomization.yaml` and add your component to the `components` list:
+
+    ```yaml kustomize/kustomization.yaml
+    apiVersion: kustomize.config.k8s.io/v1beta1
+    kind: Kustomization
+    resources:
+    - base
+    components:
+    - components/myservice
+    # other components...
+    ```
+
+    By default, optional components are commented out in the root file. Uncomment your entry (or add it uncommented) to include it in every deployment. To keep it opt-in, leave it commented and document how to enable it in your service's `README.md`.
+  </Step>
+
+  <Step title="Add the service image to skaffold.yaml">
+    Open the root `skaffold.yaml` and add an entry for your service image under `build.artifacts`. Skaffold uses the `context` path to find the `Dockerfile`:
+
+    ```yaml skaffold.yaml
+    build:
+      artifacts:
+      # existing services...
+      - image: myservice
+        context: src/myservice
+    ```
+
+    After this change, `skaffold run` and `skaffold dev` will build and push your service image alongside all other services.
+  </Step>
+
+  <Step title="Update the Helm chart and documentation">
+    **Helm chart** — add a template for your service under `helm-chart/templates/` and a corresponding entry in `helm-chart/values.yaml`. Follow the pattern of an existing service template.
+
+    **Documentation** — update the project documentation to reflect the new service:
+
+    - Add a section to `README.md` if the service introduces significant new functionality.
+    - Update architecture diagrams in `docs/img/` if the service changes the topology.
+    - Add a dedicated page under `docs/` if the service requires detailed explanation.
+  </Step>
+</Steps>

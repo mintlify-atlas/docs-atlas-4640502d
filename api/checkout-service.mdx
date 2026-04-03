@@ -1,0 +1,171 @@
+---
+title: "CheckoutService"
+description: "Orchestrates the full checkout flow, coordinating cart retrieval, currency conversion, payment, shipping, and order confirmation email."
+---
+
+## Overview
+
+`CheckoutService` is the central coordinator for purchases. When a user places an order, the checkout service retrieves their cart, converts prices to the user's preferred currency, charges the credit card via `PaymentService`, arranges shipment via `ShippingService`, and sends a confirmation email via `EmailService`.
+
+```protobuf
+service CheckoutService {
+    rpc PlaceOrder(PlaceOrderRequest) returns (PlaceOrderResponse) {}
+}
+```
+
+---
+
+## PlaceOrder
+
+Executes a complete purchase for the user. This is an orchestrating RPC that calls multiple downstream services internally.
+
+### Request — `PlaceOrderRequest`
+
+<ParamField body="user_id" type="string" required>
+  The unique identifier of the user placing the order. Used to retrieve the cart.
+</ParamField>
+
+<ParamField body="user_currency" type="string" required>
+  The 3-letter ISO 4217 currency code for displaying prices (e.g., `"USD"`, `"EUR"`).
+</ParamField>
+
+<ParamField body="address" type="Address" required>
+  The shipping address for the order.
+
+  <Expandable title="Address properties">
+    <ParamField body="street_address" type="string" required>
+      Street number and name.
+    </ParamField>
+    <ParamField body="city" type="string" required>
+      City name.
+    </ParamField>
+    <ParamField body="state" type="string" required>
+      State or province.
+    </ParamField>
+    <ParamField body="country" type="string" required>
+      Country name.
+    </ParamField>
+    <ParamField body="zip_code" type="int32" required>
+      Postal or ZIP code.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  The email address to send the order confirmation to.
+</ParamField>
+
+<ParamField body="credit_card" type="CreditCardInfo" required>
+  The payment card details.
+
+  <Expandable title="CreditCardInfo properties">
+    <ParamField body="credit_card_number" type="string" required>
+      The credit card number as a string (e.g., `"4432-8015-6152-0454"`).
+    </ParamField>
+    <ParamField body="credit_card_cvv" type="int32" required>
+      The 3- or 4-digit card verification value.
+    </ParamField>
+    <ParamField body="credit_card_expiration_year" type="int32" required>
+      The 4-digit expiration year (e.g., `2030`).
+    </ParamField>
+    <ParamField body="credit_card_expiration_month" type="int32" required>
+      The expiration month as an integer from `1` to `12`.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Response — `PlaceOrderResponse`
+
+<ResponseField name="order" type="OrderResult">
+  The result of the placed order.
+
+  <Expandable title="OrderResult properties">
+    <ResponseField name="order_id" type="string">
+      A unique identifier for the order.
+    </ResponseField>
+    <ResponseField name="shipping_tracking_id" type="string">
+      The tracking ID assigned by the shipping service.
+    </ResponseField>
+    <ResponseField name="shipping_cost" type="Money">
+      The shipping cost in the user's requested currency.
+
+      <Expandable title="Money properties">
+        <ResponseField name="currency_code" type="string">
+          The 3-letter ISO 4217 currency code (e.g., `"USD"`).
+        </ResponseField>
+        <ResponseField name="units" type="int64">
+          The whole units of the amount.
+        </ResponseField>
+        <ResponseField name="nanos" type="int32">
+          The fractional part in nanoseconds (10^-9). Must be between -999,999,999 and +999,999,999.
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    <ResponseField name="shipping_address" type="Address">
+      The address the order was shipped to.
+
+      <Expandable title="Address properties">
+        <ResponseField name="street_address" type="string">
+          Street number and name.
+        </ResponseField>
+        <ResponseField name="city" type="string">
+          City name.
+        </ResponseField>
+        <ResponseField name="state" type="string">
+          State or province.
+        </ResponseField>
+        <ResponseField name="country" type="string">
+          Country name.
+        </ResponseField>
+        <ResponseField name="zip_code" type="int32">
+          Postal or ZIP code.
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    <ResponseField name="items" type="OrderItem[]">
+      The line items included in the order.
+
+      <Expandable title="OrderItem properties">
+        <ResponseField name="item" type="CartItem">
+          The product and quantity ordered.
+        </ResponseField>
+        <ResponseField name="cost" type="Money">
+          The cost for this line item.
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## Message types
+
+### `Address`
+
+| Field | Type | Description |
+|---|---|---|
+| `street_address` | `string` | Street number and name |
+| `city` | `string` | City name |
+| `state` | `string` | State or province |
+| `country` | `string` | Country name |
+| `zip_code` | `int32` | Postal or ZIP code |
+
+### `CreditCardInfo`
+
+| Field | Type | Description |
+|---|---|---|
+| `credit_card_number` | `string` | Card number as a string |
+| `credit_card_cvv` | `int32` | Card verification value |
+| `credit_card_expiration_year` | `int32` | 4-digit expiration year |
+| `credit_card_expiration_month` | `int32` | Expiration month (1–12) |
+
+### `OrderResult`
+
+| Field | Type | Description |
+|---|---|---|
+| `order_id` | `string` | Unique order identifier |
+| `shipping_tracking_id` | `string` | Tracking ID from the shipping service |
+| `shipping_cost` | `Money` | Cost of shipping |
+| `shipping_address` | `Address` | Delivery address |
+| `items` | `repeated OrderItem` | Line items in the order |

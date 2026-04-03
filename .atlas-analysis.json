@@ -1,0 +1,102 @@
+{
+  "projectType": "infrastructure",
+  "projectName": "Cymbal Shops (Online Boutique)",
+  "projectDescription": "A cloud-first microservices demo application showcasing 11 services on Kubernetes with GKE, Istio, gRPC, Terraform, Helm, and Kustomize.",
+  "theme": "aspen",
+  "primaryColor": "#fc9c9c",
+  "lightColor": "#540c2c",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "architecture/overview",
+              "architecture/microservices"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/kubernetes",
+              "deployment/terraform",
+              "deployment/helm",
+              "deployment/kustomize"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/local-setup",
+              "development/adding-microservice"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "gRPC API",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api/overview"
+            ]
+          },
+          {
+            "group": "Services",
+            "pages": [
+              "api/cart-service",
+              "api/checkout-service",
+              "api/product-catalog-service",
+              "api/recommendation-service",
+              "api/shipping-service",
+              "api/currency-service",
+              "api/payment-service",
+              "api/email-service",
+              "api/ad-service"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "11 polyglot microservices (Go, Python, C#, Node.js, Java)",
+    "gRPC-based inter-service communication with Protocol Buffers",
+    "GKE (Google Kubernetes Engine) deployment with Autopilot support",
+    "Kustomize components for deployment variations (Istio, Spanner, Memorystore, AlloyDB)",
+    "Helm chart for simplified deployment and customization",
+    "Terraform infrastructure-as-code for GKE cluster provisioning",
+    "Cloud Service Mesh / Istio service mesh integration",
+    "Google Cloud Operations (monitoring, tracing, profiling)",
+    "AI shopping assistant powered by Gemini",
+    "Skaffold-based local development workflow"
+  ],
+  "publicApiSurface": [
+    "CartService.AddItem(AddItemRequest) -> Empty",
+    "CartService.GetCart(GetCartRequest) -> Cart",
+    "CartService.EmptyCart(EmptyCartRequest) -> Empty",
+    "RecommendationService.ListRecommendations(ListRecommendationsRequest) -> ListRecommendationsResponse",
+    "ProductCatalogService.ListProducts(Empty) -> ListProductsResponse",
+    "ProductCatalogService.GetProduct(GetProductRequest) -> Product",
+    "ProductCatalogService.SearchProducts(SearchProductsRequest) -> SearchProductsResponse",
+    "ShippingService.GetQuote(GetQuoteRequest) -> GetQuoteResponse",
+    "ShippingService.ShipOrder(ShipOrderRequest) -> ShipOrderResponse",
+    "CurrencyService.GetSupportedCurrencies(Empty) -> GetSupportedCurrenciesResponse",
+    "CurrencyService.Convert(CurrencyConversionRequest) -> Money",
+    "PaymentService.Charge(ChargeRequest) -> ChargeResponse",
+    "EmailService.SendOrderConfirmation(SendOrderConfirmationRequest) -> Empty",
+    "CheckoutService.PlaceOrder(PlaceOrderRequest) -> PlaceOrderResponse",
+    "AdService.GetAds(AdRequest) -> AdResponse"
+  ]
+}

@@ -1,0 +1,112 @@
+---
+title: "Architecture overview"
+description: "How Online Boutique (Cymbal Shops) is structured: 11 polyglot microservices communicating over gRPC on Kubernetes."
+---
+
+Online Boutique is composed of 11 microservices written in five different languages. Each service has a single, well-defined responsibility and communicates with the others exclusively over [gRPC](https://grpc.io/). No service shares a database with another service—state is owned by the service responsible for it.
+
+## Services at a glance
+
+| Service | Language | Role |
+|---|---|---|
+| `frontend` | Go | Serves the website over HTTP. Generates session IDs automatically; no login required. |
+| `cartservice` | C# | Stores and retrieves shopping cart contents in Redis. |
+| `productcatalogservice` | Go | Serves the product list from a JSON file; supports listing, lookup, and search. |
+| `currencyservice` | Node.js | Converts monetary amounts between currencies using European Central Bank rates. Highest QPS service. |
+| `paymentservice` | Node.js | Processes a mock credit card charge and returns a transaction ID. |
+| `shippingservice` | Go | Estimates shipping costs and returns a mock tracking ID when an order ships. |
+| `emailservice` | Python | Sends a mock order-confirmation email after checkout. |
+| `checkoutservice` | Go | Orchestrates the full purchase flow: fetches the cart, converts currency, charges payment, arranges shipping, and triggers the confirmation email. |
+| `recommendationservice` | Python | Returns a list of related product IDs based on the current cart contents. |
+| `adservice` | Java | Returns text ads relevant to the context keywords passed by the frontend. |
+| `loadgenerator` | Python / Locust | Simulates realistic user shopping flows against the frontend for testing and demo purposes. |
+
+## How services discover each other
+
+Every service address is injected at deploy time through environment variables. For example, `checkoutservice` receives:
+
+```yaml
+- name: PRODUCT_CATALOG_SERVICE_ADDR
+  value: "productcatalogservice:3550"
+- name: SHIPPING_SERVICE_ADDR
+  value: "shippingservice:50051"
+- name: PAYMENT_SERVICE_ADDR
+  value: "paymentservice:50051"
+- name: EMAIL_SERVICE_ADDR
+  value: "emailservice:5000"
+- name: CURRENCY_SERVICE_ADDR
+  value: "currencyservice:7000"
+- name: CART_SERVICE_ADDR
+  value: "cartservice:7070"
+```
+
+The value is a Kubernetes DNS name and port. Services resolve each other using standard Kubernetes `ClusterIP` service DNS—no service registry or sidecar is required in the default configuration.
+
+Each service is defined in `demo.proto` (package `hipstershop`) and every cross-service call is a typed gRPC RPC. There is no REST or message queue between backend services.
+
+## Data flow
+
+The following describes a typical user purchase from browser to confirmation email.
+
+<Steps>
+  <Step title="Browser request">
+    The user's browser sends an HTTP request to `frontend` on port 8080 (exposed externally on port 80 via a Kubernetes `LoadBalancer` service).
+  </Step>
+  <Step title="Page assembly">
+    `frontend` fans out gRPC calls in parallel to `productcatalogservice`, `currencyservice`, `cartservice`, `recommendationservice`, and `adservice` to collect everything needed to render the page.
+  </Step>
+  <Step title="Add to cart">
+    When the user adds an item, `frontend` calls `cartservice.AddItem`. `cartservice` writes the cart to Redis (`redis-cart:6379`).
+  </Step>
+  <Step title="Checkout initiated">
+    When the user submits the order form, `frontend` calls `checkoutservice.PlaceOrder` with the user ID, shipping address, email, and credit card details.
+  </Step>
+  <Step title="Order orchestration">
+    `checkoutservice` calls, in sequence:
+    1. `cartservice.GetCart` — retrieve the cart items
+    2. `productcatalogservice.GetProduct` — look up each product
+    3. `currencyservice.Convert` — convert prices to the user's currency
+    4. `shippingservice.ShipOrder` — arrange shipment and get a tracking ID
+    5. `paymentservice.Charge` — charge the credit card (mock)
+    6. `cartservice.EmptyCart` — clear the cart
+    7. `emailservice.SendOrderConfirmation` — send the confirmation email (mock)
+  </Step>
+  <Step title="Response">
+    `checkoutservice` returns the completed `OrderResult` to `frontend`, which renders the confirmation page.
+  </Step>
+</Steps>
+
+## Key infrastructure components
+
+### Redis for cart storage
+
+`cartservice` is the only stateful service in the default deployment. It connects to a Redis instance (`redis-cart`) that runs in the same Kubernetes namespace. Cart data is keyed by session user ID.
+
+In production variations, the in-cluster Redis can be replaced with a managed service such as [Google Cloud Memorystore](https://cloud.google.com/memorystore) or [Azure Cache for Redis](https://azure.microsoft.com/products/cache) by updating the `REDIS_ADDR` environment variable on `cartservice`.
+
+### Kubernetes for orchestration
+
+All 11 services plus Redis are deployed as Kubernetes `Deployment` objects, each with a corresponding `ClusterIP` `Service`. `frontend` additionally has a `LoadBalancer` `Service` (`frontend-external`) that exposes port 80 to the internet.
+
+Each pod runs as a non-root user with a read-only root filesystem and all Linux capabilities dropped, following least-privilege security practices.
+
+Health checks use Kubernetes-native gRPC probes (introduced in Kubernetes 1.24) for backend services, and HTTP probes on `/_healthz` for `frontend`.
+
+## Optional integrations
+
+<AccordionGroup>
+  <Accordion title="Istio / Cloud Service Mesh">
+    Applying the Istio Kustomize component adds mutual TLS between all services, distributed tracing, and traffic management policies. The `frontend` and `loadgenerator` pods already carry the annotation `sidecar.istio.io/rewriteAppHTTPProbers: "true"` to ensure HTTP readiness probes work correctly when Envoy sidecars are injected.
+
+    See `kustomize/components/service-mesh-istio/` for setup instructions.
+  </Accordion>
+  <Accordion title="Google Cloud Operations (observability)">
+    When `ENABLE_PROFILER` is set on `frontend` and `DISABLE_PROFILER` is unset on other services, services emit profiling data to Cloud Profiler. The application is also pre-instrumented for Cloud Trace and Cloud Monitoring, providing distributed traces and metrics across all 11 services without code changes.
+  </Accordion>
+  <Accordion title="Spanner and AlloyDB (alternative databases)">
+    Kustomize components are provided to swap the Redis cart backend for Cloud Spanner or AlloyDB. This demonstrates running the same application against different managed database products without modifying service code.
+  </Accordion>
+  <Accordion title="Gemini AI shopping assistant">
+    An optional `shoppingassistantservice` integrates with Gemini to suggest products based on an uploaded image. `frontend` calls it at `SHOPPING_ASSISTANT_SERVICE_ADDR` when `ENABLE_ASSISTANT=true` is set.
+  </Accordion>
+</AccordionGroup>

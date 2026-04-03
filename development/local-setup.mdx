@@ -1,0 +1,176 @@
+---
+title: 'Local development setup'
+description: 'Build and run Cymbal Shops locally using Skaffold.'
+keywords: ['skaffold', 'local development', 'GKE', 'minikube', 'kind', 'kubernetes']
+---
+
+## Prerequisites
+
+Before you begin, install the following tools:
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop) — required to build container images
+- [kubectl](https://kubernetes.io/docs/tasks/tools/) — to interact with your Kubernetes cluster
+- [Skaffold 2.0.2+](https://skaffold.dev/docs/install/) — builds and deploys all container images in bulk
+- [git](https://git-scm.com/) — to clone the repository
+
+Clone the repository:
+
+```bash
+git clone https://github.com/GoogleCloudPlatform/microservices-demo
+cd microservices-demo/
+```
+
+<Tabs>
+  <Tab title="GKE">
+
+  <Info>
+    Recommended if you have a Google Cloud project and want to test on a realistic cluster. You will need a Google Cloud project with billing enabled.
+  </Info>
+
+  <Steps>
+    <Step title="Create a GKE cluster">
+      Enable the GKE API and create an Autopilot cluster:
+
+      ```bash
+      gcloud services enable container.googleapis.com
+      ```
+
+      ```bash
+      gcloud container clusters create-auto demo --region=us-central1
+      ```
+
+      Verify that `kubectl` is pointing to the new cluster:
+
+      ```bash
+      kubectl get nodes
+      ```
+    </Step>
+
+    <Step title="Set up Artifact Registry">
+      Enable Artifact Registry, create a repository, and configure Docker authentication:
+
+      ```bash
+      gcloud services enable artifactregistry.googleapis.com
+      ```
+
+      ```bash
+      gcloud artifacts repositories create microservices-demo \
+        --repository-format=docker \
+        --location=us
+      ```
+
+      ```bash
+      gcloud auth configure-docker -q
+      ```
+    </Step>
+
+    <Step title="Build and deploy with Skaffold">
+      From the root of the repository, run:
+
+      ```bash
+      skaffold run --default-repo=us-docker.pkg.dev/PROJECT_ID/microservices-demo
+      ```
+
+      Replace `PROJECT_ID` with your Google Cloud project ID. This command builds all container images, pushes them to Artifact Registry, and deploys the application to your cluster using the manifests in `./kubernetes-manifests`.
+
+      <Warning>
+        If you are running this on **Google Cloud Shell** and see a "No space left on device" error, build the images on Cloud Build instead. First [enable the Cloud Build API](https://console.cloud.google.com/flows/enableapi?apiid=cloudbuild.googleapis.com), then run:
+
+        ```bash
+        skaffold run -p gcb --default-repo=us-docker.pkg.dev/PROJECT_ID/microservices-demo
+        ```
+      </Warning>
+    </Step>
+
+    <Step title="Access the frontend">
+      Find the external IP address of the frontend service:
+
+      ```bash
+      kubectl get service frontend-external
+      ```
+
+      Once the `EXTERNAL-IP` field is populated, open `http://EXTERNAL-IP` in your browser.
+    </Step>
+  </Steps>
+
+  </Tab>
+  <Tab title="Local cluster (Minikube/Kind)">
+
+  <Steps>
+    <Step title="Start a local Kubernetes cluster">
+      Choose one of the following options:
+
+      **Minikube** (tested on Ubuntu Linux) — requires at least 4 CPUs, 4 GiB memory, and 32 GB disk:
+
+      ```bash
+      minikube start --cpus=4 --memory 4096 --disk-size 32g
+      ```
+
+      **Docker Desktop** (macOS/Windows) — go to Preferences, enable Kubernetes, and allocate at least 3 CPUs, 6 GiB memory, and 32 GB disk.
+
+      **Kind**:
+
+      ```bash
+      kind create cluster
+      ```
+    </Step>
+
+    <Step title="Verify cluster connectivity">
+      Confirm that `kubectl` is connected to your local cluster:
+
+      ```bash
+      kubectl get nodes
+      ```
+    </Step>
+
+    <Step title="Build and deploy with Skaffold">
+      Run Skaffold from the root of the repository. The first run downloads all base images and may take around 20 minutes:
+
+      ```bash
+      skaffold run
+      ```
+
+      Skaffold builds every service image locally and deploys them to your cluster.
+    </Step>
+
+    <Step title="Verify pods are running">
+      Wait for all pods to reach the `Running` state:
+
+      ```bash
+      kubectl get pods
+      ```
+    </Step>
+
+    <Step title="Forward a port to the frontend">
+      Forward a local port to the frontend deployment:
+
+      ```bash
+      kubectl port-forward deployment/frontend 8080:8080
+      ```
+
+      Open `http://localhost:8080` in your browser to access the storefront.
+    </Step>
+  </Steps>
+
+  </Tab>
+</Tabs>
+
+## Hot-reload with `skaffold dev`
+
+When iterating on a service, use `skaffold dev` instead of `skaffold run`. Skaffold watches for file changes, rebuilds only the affected image, and re-deploys it automatically:
+
+```bash
+skaffold dev
+```
+
+<Tip>
+  `skaffold dev` streams logs from all pods directly to your terminal. Press `Ctrl+C` to stop watching and tear down the deployed resources.
+</Tip>
+
+## Cleanup
+
+To remove all deployed resources from your cluster:
+
+```bash
+skaffold delete
+```

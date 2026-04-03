@@ -1,0 +1,294 @@
+---
+title: "Microservice reference"
+description: "Per-service reference for all 11 microservices in Online Boutique: language, framework, gRPC contract, and port."
+---
+
+Each service in Online Boutique is independently deployable and communicates exclusively over gRPC using the contracts defined in `protos/demo.proto` (package `hipstershop`). The sections below document each service's language, role, gRPC interface, and Kubernetes port assignments.
+
+<AccordionGroup>
+  <Accordion title="frontend">
+    **Language:** Go
+
+    **Framework:** Standard library `net/http` with Go HTML templates. Source in `src/frontend/`.
+
+    **Role:** The only service that speaks HTTP. It serves the web UI, auto-generates a session ID cookie for every visitor (no login required), and acts as the API gateway for all browser interactions. It fans out calls to backend services to assemble each page.
+
+    **gRPC services called:**
+
+    | Service | RPCs used |
+    |---|---|
+    | `CartService` | `AddItem`, `GetCart`, `EmptyCart` |
+    | `ProductCatalogService` | `ListProducts`, `GetProduct`, `SearchProducts` |
+    | `CurrencyService` | `GetSupportedCurrencies`, `Convert` |
+    | `RecommendationService` | `ListRecommendations` |
+    | `CheckoutService` | `PlaceOrder` |
+    | `ShippingService` | `GetQuote` |
+    | `AdService` | `GetAds` |
+
+    **Does not implement a gRPC service.** All inbound traffic is HTTP.
+
+    **Ports:**
+
+    | Purpose | Port |
+    |---|---|
+    | HTTP (container) | `8080` |
+    | HTTP (ClusterIP service) | `80` → `8080` |
+    | HTTP (LoadBalancer / external) | `80` → `8080` |
+  </Accordion>
+
+  <Accordion title="cartservice">
+    **Language:** C#
+
+    **Framework:** ASP.NET Core gRPC server.
+
+    **Role:** Stores and retrieves shopping cart contents. Persists cart items in Redis keyed by user ID. This is the only service with external state in the default deployment.
+
+    **gRPC service implemented:** `CartService`
+
+    ```protobuf
+    service CartService {
+        rpc AddItem(AddItemRequest) returns (Empty) {}
+        rpc GetCart(GetCartRequest) returns (Cart) {}
+        rpc EmptyCart(EmptyCartRequest) returns (Empty) {}
+    }
+    ```
+
+    **External dependency:** Redis at `REDIS_ADDR` (default `redis-cart:6379`).
+
+    **Ports:**
+
+    | Purpose | Port |
+    |---|---|
+    | gRPC (container and service) | `7070` |
+  </Accordion>
+
+  <Accordion title="productcatalogservice">
+    **Language:** Go
+
+    **Framework:** Standard `google.golang.org/grpc` server.
+
+    **Role:** Serves the product catalog loaded from a static JSON file at startup. Supports listing all products, fetching a single product by ID, and keyword search across product names and descriptions.
+
+    **gRPC service implemented:** `ProductCatalogService`
+
+    ```protobuf
+    service ProductCatalogService {
+        rpc ListProducts(Empty) returns (ListProductsResponse) {}
+        rpc GetProduct(GetProductRequest) returns (Product) {}
+        rpc SearchProducts(SearchProductsRequest) returns (SearchProductsResponse) {}
+    }
+    ```
+
+    **Ports:**
+
+    | Purpose | Port |
+    |---|---|
+    | gRPC (container and service) | `3550` |
+  </Accordion>
+
+  <Accordion title="currencyservice">
+    **Language:** Node.js
+
+    **Framework:** `@grpc/grpc-js` server.
+
+    **Role:** Converts a monetary amount from one ISO 4217 currency code to another. Exchange rates are sourced from the European Central Bank. This is the highest-QPS service in the system because `frontend` calls `Convert` for every price displayed on every page.
+
+    **gRPC service implemented:** `CurrencyService`
+
+    ```protobuf
+    service CurrencyService {
+        rpc GetSupportedCurrencies(Empty) returns (GetSupportedCurrenciesResponse) {}
+        rpc Convert(CurrencyConversionRequest) returns (Money) {}
+    }
+    ```
+
+    **Ports:**
+
+    | Purpose | Port |
+    |---|---|
+    | gRPC (container and service) | `7000` |
+  </Accordion>
+
+  <Accordion title="paymentservice">
+    **Language:** Node.js
+
+    **Framework:** `@grpc/grpc-js` server.
+
+    **Role:** Accepts a credit card and an amount, performs a mock charge, and returns a transaction ID. The charge is simulated—no real payment network is contacted.
+
+    **gRPC service implemented:** `PaymentService`
+
+    ```protobuf
+    service PaymentService {
+        rpc Charge(ChargeRequest) returns (ChargeResponse) {}
+    }
+    ```
+
+    **Called by:** `checkoutservice` only.
+
+    **Ports:**
+
+    | Purpose | Port |
+    |---|---|
+    | gRPC (container and service) | `50051` |
+  </Accordion>
+
+  <Accordion title="shippingservice">
+    **Language:** Go
+
+    **Framework:** Standard `google.golang.org/grpc` server.
+
+    **Role:** Provides shipping cost estimates based on cart contents and a destination address, and returns a mock tracking ID when an order is shipped.
+
+    **gRPC service implemented:** `ShippingService`
+
+    ```protobuf
+    service ShippingService {
+        rpc GetQuote(GetQuoteRequest) returns (GetQuoteResponse) {}
+        rpc ShipOrder(ShipOrderRequest) returns (ShipOrderResponse) {}
+    }
+    ```
+
+    **Called by:** `frontend` (`GetQuote` for the cart page estimate) and `checkoutservice` (`ShipOrder` during purchase).
+
+    **Ports:**
+
+    | Purpose | Port |
+    |---|---|
+    | gRPC (container and service) | `50051` |
+  </Accordion>
+
+  <Accordion title="emailservice">
+    **Language:** Python
+
+    **Framework:** `grpcio` server.
+
+    **Role:** Sends a mock order-confirmation email. In the default deployment no real email is sent; the service logs the rendered confirmation and returns success.
+
+    **gRPC service implemented:** `EmailService`
+
+    ```protobuf
+    service EmailService {
+        rpc SendOrderConfirmation(SendOrderConfirmationRequest) returns (Empty) {}
+    }
+    ```
+
+    **Called by:** `checkoutservice` only.
+
+    **Ports:**
+
+    | Purpose | Port |
+    |---|---|
+    | gRPC (container, internal) | `8080` |
+    | gRPC (ClusterIP service) | `5000` → `8080` |
+
+    <Note>
+      The container listens on `8080`, but the Kubernetes `Service` object exposes it on port `5000`. Callers address the service as `emailservice:5000`.
+    </Note>
+  </Accordion>
+
+  <Accordion title="checkoutservice">
+    **Language:** Go
+
+    **Framework:** Standard `google.golang.org/grpc` server. Source in `src/checkoutservice/`.
+
+    **Role:** Orchestrates the complete purchase flow. It is the most connected backend service, calling six other services in sequence to fulfil an order.
+
+    **gRPC service implemented:** `CheckoutService`
+
+    ```protobuf
+    service CheckoutService {
+        rpc PlaceOrder(PlaceOrderRequest) returns (PlaceOrderResponse) {}
+    }
+    ```
+
+    **gRPC services called:**
+
+    | Service | RPCs used |
+    |---|---|
+    | `CartService` | `GetCart`, `EmptyCart` |
+    | `ProductCatalogService` | `GetProduct` |
+    | `CurrencyService` | `Convert` |
+    | `ShippingService` | `ShipOrder` |
+    | `PaymentService` | `Charge` |
+    | `EmailService` | `SendOrderConfirmation` |
+
+    **Ports:**
+
+    | Purpose | Port |
+    |---|---|
+    | gRPC (container and service) | `5050` |
+  </Accordion>
+
+  <Accordion title="recommendationservice">
+    **Language:** Python
+
+    **Framework:** `grpcio` server.
+
+    **Role:** Returns a list of recommended product IDs based on the product IDs currently in the user's cart. Internally calls `productcatalogservice` to fetch the full catalog, then selects products not already in the cart.
+
+    **gRPC service implemented:** `RecommendationService`
+
+    ```protobuf
+    service RecommendationService {
+        rpc ListRecommendations(ListRecommendationsRequest) returns (ListRecommendationsResponse) {}
+    }
+    ```
+
+    **gRPC services called:**
+
+    | Service | RPCs used |
+    |---|---|
+    | `ProductCatalogService` | `ListProducts` |
+
+    **Ports:**
+
+    | Purpose | Port |
+    |---|---|
+    | gRPC (container and service) | `8080` |
+  </Accordion>
+
+  <Accordion title="adservice">
+    **Language:** Java
+
+    **Framework:** `grpc-java` server (Netty transport).
+
+    **Role:** Returns a small set of text advertisements relevant to the context keywords supplied by the caller. `frontend` passes the product category of the current page as context.
+
+    **gRPC service implemented:** `AdService`
+
+    ```protobuf
+    service AdService {
+        rpc GetAds(AdRequest) returns (AdResponse) {}
+    }
+    ```
+
+    **Called by:** `frontend` only.
+
+    **Ports:**
+
+    | Purpose | Port |
+    |---|---|
+    | gRPC (container and service) | `9555` |
+  </Accordion>
+
+  <Accordion title="loadgenerator">
+    **Language:** Python / Locust
+
+    **Framework:** [Locust](https://locust.io/) load-testing framework.
+
+    **Role:** Simulates realistic user shopping flows against `frontend` over HTTP. It is not a backend service and does not implement or call any gRPC service. It runs continuously in the cluster to produce representative traffic for demos and performance testing.
+
+    **Does not implement or call any gRPC service.** All traffic is HTTP to `frontend:80`.
+
+    **Ports:**
+
+    | Purpose | Port |
+    |---|---|
+    | HTTP target (`frontend`) | `80` |
+
+    <Note>
+      `loadgenerator` uses an init container that polls `frontend:80` and waits for an HTTP 200 before starting, ensuring it does not generate load before the rest of the system is ready.
+    </Note>
+  </Accordion>
+</AccordionGroup>

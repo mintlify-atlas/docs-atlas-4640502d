@@ -1,0 +1,135 @@
+---
+title: "EmailService"
+description: "Sends order confirmation emails after a successful checkout. Returns an empty response on success."
+---
+
+<Note>
+  This is a mock service. No real emails are sent. The service logs the order confirmation content but does not connect to an email provider.
+</Note>
+
+## Overview
+
+`EmailService` is called by `CheckoutService` as the final step in the order placement flow. It receives the customer's email address and a full `OrderResult` and sends (or simulates sending) an order confirmation.
+
+```protobuf
+service EmailService {
+    rpc SendOrderConfirmation(SendOrderConfirmationRequest) returns (Empty) {}
+}
+```
+
+---
+
+## SendOrderConfirmation
+
+Sends an order confirmation email to the specified address.
+
+### Request — `SendOrderConfirmationRequest`
+
+<ParamField body="email" type="string" required>
+  The customer's email address to send the confirmation to.
+</ParamField>
+
+<ParamField body="order" type="OrderResult" required>
+  The completed order details to include in the confirmation email.
+
+  <Expandable title="OrderResult properties">
+    <ParamField body="order_id" type="string" required>
+      The unique identifier for the order.
+    </ParamField>
+    <ParamField body="shipping_tracking_id" type="string" required>
+      The tracking ID assigned by the shipping service.
+    </ParamField>
+    <ParamField body="shipping_cost" type="Money" required>
+      The shipping cost for the order.
+
+      <Expandable title="Money properties">
+        <ParamField body="currency_code" type="string" required>
+          The 3-letter ISO 4217 currency code.
+        </ParamField>
+        <ParamField body="units" type="int64" required>
+          The whole units of the amount.
+        </ParamField>
+        <ParamField body="nanos" type="int32" required>
+          The fractional units in nanoseconds (10^-9). Range: -999,999,999 to +999,999,999.
+        </ParamField>
+      </Expandable>
+    </ParamField>
+    <ParamField body="shipping_address" type="Address" required>
+      The delivery address for the order.
+
+      <Expandable title="Address properties">
+        <ParamField body="street_address" type="string" required>
+          Street number and name.
+        </ParamField>
+        <ParamField body="city" type="string" required>
+          City name.
+        </ParamField>
+        <ParamField body="state" type="string" required>
+          State or province.
+        </ParamField>
+        <ParamField body="country" type="string" required>
+          Country name.
+        </ParamField>
+        <ParamField body="zip_code" type="int32" required>
+          Postal or ZIP code.
+        </ParamField>
+      </Expandable>
+    </ParamField>
+    <ParamField body="items" type="repeated OrderItem" required>
+      The line items included in the order.
+
+      <Expandable title="OrderItem properties">
+        <ParamField body="item" type="CartItem" required>
+          The product and quantity ordered.
+
+          <Expandable title="CartItem properties">
+            <ParamField body="product_id" type="string" required>
+              Unique product identifier.
+            </ParamField>
+            <ParamField body="quantity" type="int32" required>
+              Number of units ordered.
+            </ParamField>
+          </Expandable>
+        </ParamField>
+        <ParamField body="cost" type="Money" required>
+          The cost for this line item.
+        </ParamField>
+      </Expandable>
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Response
+
+Returns an `Empty` message on success.
+
+---
+
+## Message types
+
+### `OrderResult`
+
+| Field | Type | Description |
+|---|---|---|
+| `order_id` | `string` | Unique order identifier |
+| `shipping_tracking_id` | `string` | Tracking ID from the shipping service |
+| `shipping_cost` | `Money` | Cost of shipping |
+| `shipping_address` | `Address` | Delivery address |
+| `items` | `repeated OrderItem` | Line items in the order |
+
+### `OrderItem`
+
+| Field | Type | Description |
+|---|---|---|
+| `item` | `CartItem` | The product and quantity |
+| `cost` | `Money` | Cost for this line item |
+
+### `Address`
+
+| Field | Type | Description |
+|---|---|---|
+| `street_address` | `string` | Street number and name |
+| `city` | `string` | City name |
+| `state` | `string` | State or province |
+| `country` | `string` | Country name |
+| `zip_code` | `int32` | Postal or ZIP code |

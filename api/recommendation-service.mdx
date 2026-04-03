@@ -1,0 +1,53 @@
+---
+title: "RecommendationService"
+description: "Returns product recommendations for a given user based on the products currently in their cart."
+---
+
+## Overview
+
+`RecommendationService` queries the `ProductCatalogService` for the full product list and returns a subset of product IDs that are not already in the user's cart. The frontend uses this to render the "You may also like" section on the product page.
+
+```protobuf
+service RecommendationService {
+    rpc ListRecommendations(ListRecommendationsRequest) returns (ListRecommendationsResponse) {}
+}
+```
+
+---
+
+## ListRecommendations
+
+Returns a list of recommended product IDs for the given user, excluding products already represented by `product_ids`.
+
+### Request — `ListRecommendationsRequest`
+
+<ParamField body="user_id" type="string" required>
+  The unique identifier of the user requesting recommendations.
+</ParamField>
+
+<ParamField body="product_ids" type="repeated string" required>
+  A list of product IDs already in the user's cart. Products in this list are excluded from the recommendations.
+</ParamField>
+
+### Response — `ListRecommendationsResponse`
+
+<ResponseField name="product_ids" type="string[]">
+  A list of recommended product IDs. Use these IDs with `ProductCatalogService.GetProduct` to fetch full product details.
+</ResponseField>
+
+---
+
+## Message types
+
+### `ListRecommendationsRequest`
+
+| Field | Type | Description |
+|---|---|---|
+| `user_id` | `string` | User identifier |
+| `product_ids` | `repeated string` | Products to exclude from recommendations |
+
+### `ListRecommendationsResponse`
+
+| Field | Type | Description |
+|---|---|---|
+| `product_ids` | `repeated string` | Recommended product IDs |

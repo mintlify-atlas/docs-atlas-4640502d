@@ -1,0 +1,118 @@
+---
+title: "CartService"
+description: "Manages per-user shopping cart state. Cart data is stored in Redis and keyed by user ID."
+---
+
+## Overview
+
+`CartService` provides three RPCs for managing shopping carts. The frontend calls these RPCs directly as users interact with the cart UI. Cart state persists across requests using a Redis backend.
+
+```protobuf
+service CartService {
+    rpc AddItem(AddItemRequest) returns (Empty) {}
+    rpc GetCart(GetCartRequest) returns (Cart) {}
+    rpc EmptyCart(EmptyCartRequest) returns (Empty) {}
+}
+```
+
+---
+
+## AddItem
+
+Adds a product to the user's cart. If the product already exists in the cart, its quantity is incremented.
+
+### Request — `AddItemRequest`
+
+<ParamField body="user_id" type="string" required>
+  The unique identifier of the user whose cart to update.
+</ParamField>
+
+<ParamField body="item" type="CartItem" required>
+  The product and quantity to add.
+
+  <Expandable title="CartItem properties">
+    <ParamField body="product_id" type="string" required>
+      The unique identifier of the product to add.
+    </ParamField>
+    <ParamField body="quantity" type="int32" required>
+      The number of units to add.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Response — `Empty`
+
+Returns an empty message on success.
+
+---
+
+## GetCart
+
+Retrieves the current contents of a user's cart.
+
+### Request — `GetCartRequest`
+
+<ParamField body="user_id" type="string" required>
+  The unique identifier of the user whose cart to retrieve.
+</ParamField>
+
+### Response — `Cart`
+
+<ResponseField name="user_id" type="string">
+  The user identifier associated with this cart.
+</ResponseField>
+
+<ResponseField name="items" type="CartItem[]">
+  The list of items currently in the cart.
+
+  <Expandable title="CartItem properties">
+    <ResponseField name="product_id" type="string">
+      The unique identifier of the product.
+    </ResponseField>
+    <ResponseField name="quantity" type="int32">
+      The number of units of this product in the cart.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## EmptyCart
+
+Removes all items from a user's cart.
+
+### Request — `EmptyCartRequest`
+
+<ParamField body="user_id" type="string" required>
+  The unique identifier of the user whose cart to clear.
+</ParamField>
+
+### Response — `Empty`
+
+Returns an empty message on success.
+
+---
+
+## Message types
+
+### `CartItem`
+
+Represents a single product and quantity in the cart.
+
+| Field | Type | Description |
+|---|---|---|
+| `product_id` | `string` | Unique product identifier |
+| `quantity` | `int32` | Number of units |
+
+### `Cart`
+
+Represents a user's full cart state.
+
+| Field | Type | Description |
+|---|---|---|
+| `user_id` | `string` | Owner of this cart |
+| `items` | `repeated CartItem` | Items currently in the cart |
+
+### `Empty`
+
+An empty message used as a no-op response when no data needs to be returned.

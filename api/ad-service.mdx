@@ -1,0 +1,64 @@
+---
+title: "AdService"
+description: "Returns contextual advertisements based on keywords from the current page."
+---
+
+## Overview
+
+`AdService` serves banner ads on product pages. The frontend sends a list of context keywords describing the current page (for example, product categories), and the service returns a set of relevant ads.
+
+```protobuf
+service AdService {
+    rpc GetAds(AdRequest) returns (AdResponse) {}
+}
+```
+
+---
+
+## GetAds
+
+Returns a list of ads relevant to the provided context keywords.
+
+### Request — `AdRequest`
+
+<ParamField body="context_keys" type="repeated string" required>
+  A list of keywords describing the current page context. These typically correspond to product categories (e.g., `"clothing"`, `"kitchen"`, `"accessories"`). The service selects ads that match one or more of these keys.
+</ParamField>
+
+### Response — `AdResponse`
+
+<ResponseField name="ads" type="Ad[]">
+  The list of ads to display on the page.
+
+  <Expandable title="Ad properties">
+    <ResponseField name="redirect_url" type="string">
+      The URL to navigate to when the ad is clicked.
+    </ResponseField>
+    <ResponseField name="text" type="string">
+      The short advertisement text to display in the banner.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## Message types
+
+### `AdRequest`
+
+| Field | Type | Description |
+|---|---|---|
+| `context_keys` | `repeated string` | Keywords describing the current page context |
+
+### `AdResponse`
+
+| Field | Type | Description |
+|---|---|---|
+| `ads` | `repeated Ad` | Ads to display |
+
+### `Ad`
+
+| Field | Type | Description |
+|---|---|---|
+| `redirect_url` | `string` | URL to open when the ad is clicked |
+| `text` | `string` | Short advertisement text |

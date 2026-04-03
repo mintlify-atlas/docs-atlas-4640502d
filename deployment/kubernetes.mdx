@@ -1,0 +1,119 @@
+---
+title: "Kubernetes deployment"
+description: "Deploy Cymbal Shops to any Kubernetes cluster using pre-built manifests and kubectl."
+---
+
+Deploy Cymbal Shops (Online Boutique) to any Kubernetes cluster using the pre-built release manifests. No image building required — all services reference public container images.
+
+<Note>
+  The manifests in `kubernetes-manifests/` are for local development with Skaffold and do not contain image tags. For a direct cluster deployment, always use `release/kubernetes-manifests.yaml`.
+</Note>
+
+## Prerequisites
+
+- `kubectl` installed and configured
+- A running Kubernetes cluster with your credentials set as the active context
+- Sufficient cluster capacity for 11 microservices (approximately 2–4 nodes recommended)
+
+## Deploy
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the latest stable release. The `--depth 1` flag skips downloading full git history.
+
+    ```bash
+    git clone --depth 1 --branch v0 https://github.com/GoogleCloudPlatform/microservices-demo.git
+    cd microservices-demo/
+    ```
+  </Step>
+
+  <Step title="Apply the release manifests">
+    Deploy all Cymbal Shops services to your cluster in a single command:
+
+    ```bash
+    kubectl apply -f ./release/kubernetes-manifests.yaml
+    ```
+
+    This creates Deployments, Services, and a ServiceAccount for all 11 microservices.
+  </Step>
+
+  <Step title="Wait for pods to be ready">
+    Monitor the rollout until all pods reach `Running` status:
+
+    ```bash
+    kubectl get pods
+    ```
+
+    After a few minutes, you should see output similar to:
+
+    ```
+    NAME                                     READY   STATUS    RESTARTS   AGE
+    adservice-76bdd69666-ckc5j               1/1     Running   0          2m58s
+    cartservice-66d497c6b7-dp5jr             1/1     Running   0          2m59s
+    checkoutservice-666c784bd6-4jd22         1/1     Running   0          3m1s
+    currencyservice-5d5d496984-4jmd7         1/1     Running   0          2m59s
+    emailservice-667457d9d6-75jcq            1/1     Running   0          3m2s
+    frontend-6b8d69b9fb-wjqdg                1/1     Running   0          3m1s
+    loadgenerator-665b5cd444-gwqdq           1/1     Running   0          3m
+    paymentservice-68596d6dd6-bf6bv          1/1     Running   0          3m
+    productcatalogservice-557d474574-888kr   1/1     Running   0          3m
+    recommendationservice-69c56b74d4-7z8r5   1/1     Running   0          3m1s
+    redis-cart-5f59546cdd-5jnqf              1/1     Running   0          2m58s
+    shippingservice-6ccc89f8fd-v686r         1/1     Running   0          2m58s
+    ```
+  </Step>
+
+  <Step title="Get the external IP">
+    Retrieve the external IP address assigned to the frontend load balancer:
+
+    ```bash
+    kubectl get service frontend-external | awk '{print $4}'
+    ```
+
+    <Note>
+      On GKE and other cloud providers, the external IP may show `<pending>` for a few minutes while the load balancer is provisioned. Re-run the command after waiting.
+    </Note>
+
+    Once you have the IP, open `http://EXTERNAL_IP` in a browser to access your Cymbal Shops instance.
+  </Step>
+</Steps>
+
+## Check pod status
+
+Use the following commands to inspect the state of your deployment:
+
+```bash
+# Overview of all pods
+kubectl get pods
+
+# Detailed status for a specific pod
+kubectl describe pod <pod-name>
+
+# Stream logs from a service
+kubectl logs -f deployment/frontend
+```
+
+To watch pods continuously as they start up, add the `-w` flag:
+
+```bash
+kubectl get pods -w
+```
+
+## Cleanup
+
+Remove all Cymbal Shops resources from your cluster:
+
+```bash
+kubectl delete -f ./release/kubernetes-manifests.yaml
+```
+
+If you created a dedicated GKE cluster for this deployment, you can delete the entire cluster instead:
+
+```bash
+gcloud container clusters delete online-boutique \
+  --project=${PROJECT_ID} --region=${REGION}
+```
+
+<Tip>
+  For customized deployments — such as enabling Cymbal Branding, integrating with Google Cloud Operations, or adding network policies — use the [Kustomize deployment](/deployment/kustomize) instead.
+</Tip>

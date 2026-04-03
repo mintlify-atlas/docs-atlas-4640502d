@@ -1,0 +1,124 @@
+---
+title: "Terraform deployment"
+description: "Provision a GKE cluster and deploy Cymbal Shops automatically using Terraform."
+---
+
+The Terraform configuration in the `terraform/` directory provisions a GKE Autopilot cluster, enables the required Google Cloud APIs, fetches cluster credentials, and deploys Cymbal Shops — all in a single `terraform apply`.
+
+## Prerequisites
+
+- A Google Cloud project with [billing enabled](https://cloud.google.com/billing/docs/how-to/verify-billing-enabled)
+- [Terraform](https://developer.hashicorp.com/terraform/install) installed
+- [Google Cloud SDK (`gcloud`)](https://cloud.google.com/sdk/docs/install) installed and authenticated
+- `kubectl` installed (fetched automatically by the Terraform module if missing)
+
+## What gets created
+
+Running `terraform apply` provisions the following resources:
+
+- **GKE Autopilot cluster** — a fully managed cluster named `online-boutique` in `us-central1` by default
+- **Google Cloud APIs** — enables `container.googleapis.com`, `monitoring.googleapis.com`, `cloudtrace.googleapis.com`, and `cloudprofiler.googleapis.com`
+- **Cymbal Shops deployment** — applies the Kustomize manifests from `kustomize/` into the cluster via `kubectl apply -k`
+- **Memorystore (Redis)** — optionally enabled by setting `memorystore = true`, which also enables `redis.googleapis.com`
+
+## Deploy
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/GoogleCloudPlatform/microservices-demo.git
+    cd microservices-demo/terraform
+    ```
+  </Step>
+
+  <Step title="Configure your project ID">
+    Open `terraform.tfvars` and replace `<project_id_here>` with your Google Cloud project ID:
+
+    ```hcl
+    gcp_project_id = "your-project-id"
+    memorystore    = false
+    ```
+
+    To enable a Memorystore (Redis) instance instead of the in-cluster Redis, set `memorystore = true`.
+  </Step>
+
+  <Step title="Initialize Terraform">
+    Download the required providers and modules:
+
+    ```bash
+    terraform init
+    ```
+  </Step>
+
+  <Step title="Preview the execution plan">
+    Review the resources Terraform will create before applying:
+
+    ```bash
+    terraform plan
+    ```
+  </Step>
+
+  <Step title="Apply and deploy">
+    Create the cluster and deploy Cymbal Shops:
+
+    ```bash
+    terraform apply
+    ```
+
+    When prompted, type `yes` and press Enter to confirm.
+
+    <Warning>
+      This step takes approximately 10 minutes. Do not interrupt the process — partial applies can leave resources in an inconsistent state.
+    </Warning>
+  </Step>
+
+  <Step title="Access the application">
+    Once Terraform completes, retrieve the frontend's external IP:
+
+    ```bash
+    kubectl get service frontend-external | awk '{print $4}'
+    ```
+
+    Alternatively, navigate to **Kubernetes Engine → Services & Ingress** in the Google Cloud Console and find the endpoint for `frontend-external`.
+
+    Open `http://EXTERNAL_IP` in a browser to access Cymbal Shops.
+  </Step>
+</Steps>
+
+## Variable reference
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `gcp_project_id` | `string` | — | The GCP project ID to deploy into. Required. |
+| `name` | `string` | `"online-boutique"` | Name of the GKE cluster. |
+| `region` | `string` | `"us-central1"` | Region for the GKE cluster. |
+| `namespace` | `string` | `"default"` | Kubernetes namespace for Cymbal Shops resources. |
+| `filepath_manifest` | `string` | `"../kustomize/"` | Path to the Kustomize manifests to deploy. |
+| `memorystore` | `bool` | — | Set to `true` to replace in-cluster Redis with a Memorystore instance. Required. |
+
+## Cleanup
+
+To remove all resources created by Terraform without deleting the project:
+
+<Steps>
+  <Step title="Disable deletion protection on the GKE cluster">
+    By default the cluster has deletion protection enabled. Uncomment the setting in `main.tf` and re-apply:
+
+    ```bash
+    sed -i "s/# deletion_protection/deletion_protection/g" main.tf
+    terraform apply
+    ```
+  </Step>
+
+  <Step title="Destroy all resources">
+    ```bash
+    terraform destroy
+    ```
+
+    When prompted, type `yes` and press Enter.
+  </Step>
+</Steps>
+
+<Note>
+  Alternatively, you can delete the entire Google Cloud project to remove all resources at once, which avoids any risk of lingering charges.
+</Note>

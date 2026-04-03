@@ -1,0 +1,169 @@
+---
+title: "Kustomize deployment"
+description: "Deploy and customize Cymbal Shops using Kustomize components for features like Cymbal branding, Memorystore, Spanner, Istio, and more."
+---
+
+Kustomize is a Kubernetes configuration management tool built into `kubectl`. It lets you customize manifests without duplication by composing a base configuration with reusable **components**. Cymbal Shops ships a base configuration and a library of optional components you can mix and match.
+
+## Prerequisites
+
+- A running Kubernetes cluster with `kubectl` configured
+- Optionally, install the [`kustomize` CLI](https://kubectl.docs.kubernetes.io/installation/) to use `kustomize edit` commands instead of editing `kustomization.yaml` by hand
+
+## Base deployment
+
+<Steps>
+  <Step title="Clone the repository and navigate to the kustomize directory">
+    ```bash
+    git clone https://github.com/GoogleCloudPlatform/microservices-demo.git
+    cd microservices-demo/kustomize/
+    ```
+  </Step>
+
+  <Step title="Preview the generated manifests">
+    Render the manifests locally without deploying, to verify the output:
+
+    ```bash
+    kubectl kustomize .
+    ```
+  </Step>
+
+  <Step title="Apply the base configuration">
+    ```bash
+    kubectl apply -k .
+    ```
+  </Step>
+
+  <Step title="Wait for pods to be ready">
+    ```bash
+    kubectl get pods
+    ```
+
+    After 2–3 minutes all pods should show `Running`:
+
+    ```
+    NAME                                     READY   STATUS    RESTARTS   AGE
+    adservice-76bdd69666-ckc5j               1/1     Running   0          2m58s
+    cartservice-66d497c6b7-dp5jr             1/1     Running   0          2m59s
+    checkoutservice-666c784bd6-4jd22         1/1     Running   0          3m1s
+    currencyservice-5d5d496984-4jmd7         1/1     Running   0          2m59s
+    emailservice-667457d9d6-75jcq            1/1     Running   0          3m2s
+    frontend-6b8d69b9fb-wjqdg                1/1     Running   0          3m1s
+    loadgenerator-665b5cd444-gwqdq           1/1     Running   0          3m
+    paymentservice-68596d6dd6-bf6bv          1/1     Running   0          3m
+    productcatalogservice-557d474574-888kr   1/1     Running   0          3m
+    recommendationservice-69c56b74d4-7z8r5   1/1     Running   0          3m1s
+    shippingservice-6ccc89f8fd-v686r         1/1     Running   0          2m58s
+    ```
+  </Step>
+
+  <Step title="Access the application">
+    ```bash
+    kubectl get service frontend-external | awk '{print $4}'
+    ```
+
+    Open `http://EXTERNAL_IP` in your browser. The IP may show `<pending>` for a few minutes while the load balancer is provisioned.
+  </Step>
+</Steps>
+
+## Available components
+
+Each variation is packaged as a Kustomize component that can be composed with any other:
+
+| Component | Path | Description |
+|---|---|---|
+| Cymbal Branding | `components/cymbal-branding` | Replaces Online Boutique branding with the Cymbal Shops brand by enabling the `CYMBAL_BRANDING` env var on the frontend. |
+| Google Cloud Operations | `components/google-cloud-operations` | Enables Cloud Monitoring, Cloud Trace, and Cloud Profiler via environment variables on the relevant services. |
+| Memorystore (Redis) | `components/memorystore` | Replaces the in-cluster Redis cart database with a Google Cloud Memorystore instance. Affects `cartservice`. |
+| Spanner | `components/spanner` | Replaces the in-cluster Redis cart database with a Cloud Spanner database. Affects `cartservice`. |
+| AlloyDB | `components/alloydb` | Replaces the in-cluster Redis cart database with an AlloyDB database. Affects `cartservice`. |
+| Network Policies | `components/network-policies` | Deploys fine-grained `NetworkPolicy` resources for each service. |
+| Istio / Service Mesh | `components/service-mesh-istio` | Configures Istio service mesh resources (VirtualService, DestinationRule, etc.). |
+| Shopping Assistant | `components/shopping-assistant` | Adds a Gemini-powered AI assistant that recommends products based on images. |
+| Non-public frontend | `components/non-public-frontend` | Removes the external `LoadBalancer` service from the frontend. |
+| Single shared session | `components/single-shared-session` | Configures the frontend to use a single shared session across all users. |
+| Without load generator | `components/without-loadgenerator` | Excludes the load generator from the deployment. |
+| Custom image registry | `components/container-images-registry` | Overrides the container image registry for all services. |
+| Custom image tag | `components/container-images-tag` | Overrides the image tag for all services. Must be applied last. |
+| Image tag suffix | `components/container-images-tag-suffix` | Appends a suffix to the image tag. Must be applied last. |
+
+<Warning>
+  `container-images-tag`, `container-images-tag-suffix`, and `container-images-registry` must be listed last in the `components` list and in that order when combined.
+</Warning>
+
+## Add components
+
+<Tabs>
+  <Tab title="Using kustomize edit">
+    From the `kustomize/` directory, run `kustomize edit add component` for each variation you want. For example, to enable Cymbal Branding and Google Cloud Operations:
+
+    ```bash
+    kustomize edit add component components/cymbal-branding
+    kustomize edit add component components/google-cloud-operations
+    ```
+
+    To add network policies and Istio resources:
+
+    ```bash
+    kustomize edit add component components/network-policies
+    kustomize edit add component components/service-mesh-istio
+    ```
+
+    After adding components, apply the configuration:
+
+    ```bash
+    kubectl apply -k .
+    ```
+  </Tab>
+  <Tab title="Editing kustomization.yaml manually">
+    Open `kustomize/kustomization.yaml` and uncomment or add the components you want under the `components:` key:
+
+    ```yaml
+    apiVersion: kustomize.config.k8s.io/v1beta1
+    kind: Kustomization
+    resources:
+    - base
+    components:
+    - components/cymbal-branding
+    - components/google-cloud-operations
+    - components/network-policies
+    - components/service-mesh-istio
+    ```
+
+    Then apply:
+
+    ```bash
+    kubectl apply -k .
+    ```
+  </Tab>
+</Tabs>
+
+## Use remote targets
+
+Kustomize can reference the upstream repository directly, so you don't need a local clone:
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- github.com/GoogleCloudPlatform/microservices-demo/kustomize/base
+components:
+- github.com/GoogleCloudPlatform/microservices-demo/kustomize/components/cymbal-branding
+- github.com/GoogleCloudPlatform/microservices-demo/kustomize/components/google-cloud-operations
+```
+
+Apply this `kustomization.yaml` from any directory:
+
+```bash
+kubectl apply -k .
+```
+
+<Tip>
+  Remote targets always fetch from the default branch. Pin to a specific commit or tag by appending `?ref=v0` to the URL, for example: `github.com/GoogleCloudPlatform/microservices-demo/kustomize/base?ref=v0`.
+</Tip>
+
+## Cleanup
+
+```bash
+kubectl delete -k .
+```

@@ -1,0 +1,88 @@
+---
+title: "PaymentService"
+description: "Processes credit card charges for a given monetary amount. Returns a transaction ID on success."
+---
+
+<Note>
+  This is a mock service. No real payment processing occurs. Any syntactically valid credit card number will be accepted and a randomly generated transaction ID will be returned.
+</Note>
+
+## Overview
+
+`PaymentService` is called by `CheckoutService` during the order placement flow. It accepts a charge amount and credit card details, and returns a transaction ID that is included in the order result.
+
+```protobuf
+service PaymentService {
+    rpc Charge(ChargeRequest) returns (ChargeResponse) {}
+}
+```
+
+---
+
+## Charge
+
+Charges a credit card for the specified amount.
+
+### Request — `ChargeRequest`
+
+<ParamField body="amount" type="Money" required>
+  The amount to charge to the credit card.
+
+  <Expandable title="Money properties">
+    <ParamField body="currency_code" type="string" required>
+      The 3-letter ISO 4217 currency code (e.g., `"USD"`).
+    </ParamField>
+    <ParamField body="units" type="int64" required>
+      The whole units of the charge amount.
+    </ParamField>
+    <ParamField body="nanos" type="int32" required>
+      The fractional units in nanoseconds (10^-9). Range: -999,999,999 to +999,999,999.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="credit_card" type="CreditCardInfo" required>
+  The credit card to charge.
+
+  <Expandable title="CreditCardInfo properties">
+    <ParamField body="credit_card_number" type="string" required>
+      The credit card number as a string (e.g., `"4432-8015-6152-0454"`).
+    </ParamField>
+    <ParamField body="credit_card_cvv" type="int32" required>
+      The 3- or 4-digit card verification value.
+    </ParamField>
+    <ParamField body="credit_card_expiration_year" type="int32" required>
+      The 4-digit expiration year (e.g., `2030`).
+    </ParamField>
+    <ParamField body="credit_card_expiration_month" type="int32" required>
+      The expiration month as an integer from `1` to `12`.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Response — `ChargeResponse`
+
+<ResponseField name="transaction_id" type="string">
+  A unique identifier for the transaction. Included in the order result returned by `CheckoutService.PlaceOrder`.
+</ResponseField>
+
+---
+
+## Message types
+
+### `CreditCardInfo`
+
+| Field | Type | Description |
+|---|---|---|
+| `credit_card_number` | `string` | Card number as a string |
+| `credit_card_cvv` | `int32` | Card verification value |
+| `credit_card_expiration_year` | `int32` | 4-digit expiration year |
+| `credit_card_expiration_month` | `int32` | Expiration month (1–12) |
+
+### `Money`
+
+| Field | Type | Description |
+|---|---|---|
+| `currency_code` | `string` | 3-letter ISO 4217 currency code (e.g., `"USD"`) |
+| `units` | `int64` | Whole units of the amount |
+| `nanos` | `int32` | Fractional units in nanoseconds (10^-9). Range: -999,999,999 to +999,999,999 |

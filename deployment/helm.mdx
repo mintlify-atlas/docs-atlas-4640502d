@@ -1,0 +1,131 @@
+---
+title: "Helm deployment"
+description: "Deploy Cymbal Shops to Kubernetes using the official Helm chart with flexible configuration options."
+---
+
+The Cymbal Shops Helm chart is published to Google Artifact Registry as an OCI artifact. It lets you install and configure the full application — including service accounts, network policies, Istio resources, and cart database backends — using standard Helm values.
+
+<Warning>
+  The Cymbal Shops Helm chart is currently experimental. If you encounter issues, report them in [GitHub Issue #1319](https://github.com/GoogleCloudPlatform/microservices-demo/issues/1319).
+</Warning>
+
+## Prerequisites
+
+- [Helm 3](https://helm.sh/docs/intro/install/) installed
+- A running Kubernetes cluster with `kubectl` configured
+
+## Install
+
+### Default installation
+
+Deploy Cymbal Shops with all default settings:
+
+```bash
+helm upgrade onlineboutique oci://us-docker.pkg.dev/online-boutique-ci/charts/onlineboutique \
+    --install
+```
+
+This deploys all 11 services, an in-cluster Redis instance for the cart, and exposes the frontend via a `LoadBalancer` service.
+
+### Get the external IP
+
+```bash
+kubectl get service frontend-external | awk '{print $4}'
+```
+
+## Customize the installation
+
+### Using `--set` flags
+
+Pass individual values directly on the command line:
+
+```bash
+# Disable the load generator
+helm upgrade onlineboutique oci://us-docker.pkg.dev/online-boutique-ci/charts/onlineboutique \
+    --install \
+    --set loadGenerator.create=false
+
+# Enable Cymbal Shops branding on the frontend
+helm upgrade onlineboutique oci://us-docker.pkg.dev/online-boutique-ci/charts/onlineboutique \
+    --install \
+    --set frontend.cymbalBranding=true
+
+# Enable Google Cloud Operations (tracing, profiler, metrics)
+helm upgrade onlineboutique oci://us-docker.pkg.dev/online-boutique-ci/charts/onlineboutique \
+    --install \
+    --set googleCloudOperations.tracing=true \
+    --set googleCloudOperations.profiler=true \
+    --set googleCloudOperations.metrics=true
+```
+
+### Using a values file
+
+For complex configurations, create a `my-values.yaml` file and pass it with `-f`:
+
+```bash
+helm upgrade onlineboutique oci://us-docker.pkg.dev/online-boutique-ci/charts/onlineboutique \
+    --install \
+    -f my-values.yaml
+```
+
+### Advanced scenario example
+
+The following command deploys Cymbal Shops in a dedicated namespace using a custom image registry, Cloud Spanner as the cart backend, and Istio authorization policies:
+
+```bash
+helm upgrade onlineboutique oci://us-docker.pkg.dev/online-boutique-ci/charts/onlineboutique \
+    --install \
+    --create-namespace \
+    --set images.repository=us-docker.pkg.dev/my-project/microservices-demo \
+    --set frontend.externalService=false \
+    --set redis.create=false \
+    --set cartservice.database.type=spanner \
+    --set cartservice.database.connectionString=projects/my-project/instances/onlineboutique/databases/carts \
+    --set serviceAccounts.create=true \
+    --set authorizationPolicies.create=true \
+    --set networkPolicies.create=true \
+    --set sidecars.create=true \
+    --set frontend.virtualService.create=true \
+    --set 'serviceAccounts.annotations.iam\.gke\.io/gcp-service-account=spanner-db-user@my-project.iam.gserviceaccount.com' \
+    --set serviceAccounts.annotationsOnlyForCartservice=true \
+    -n onlineboutique
+```
+
+## Key values reference
+
+| Value | Default | Description |
+|---|---|---|
+| `images.repository` | `us-central1-docker.pkg.dev/google-samples/microservices-demo` | Container image registry for all services. |
+| `images.tag` | `""` (uses chart `appVersion`) | Image tag override for all services. |
+| `frontend.externalService` | `true` | Expose the frontend via a `LoadBalancer` service. |
+| `frontend.cymbalBranding` | `false` | Enable Cymbal Shops branding on the frontend. |
+| `frontend.platform` | `local` | Cloud platform hint. One of: `local`, `gcp`, `aws`, `azure`, `onprem`, `alibaba`. |
+| `frontend.singleSharedSession` | `false` | Configure the frontend to use a single shared session. |
+| `frontend.virtualService.create` | `false` | Create an Istio `VirtualService` for the frontend. |
+| `loadGenerator.create` | `true` | Deploy the load generator. |
+| `networkPolicies.create` | `false` | Create fine-grained `NetworkPolicy` resources per service. |
+| `sidecars.create` | `false` | Create Istio `Sidecar` resources per service. |
+| `authorizationPolicies.create` | `false` | Create Istio `AuthorizationPolicy` resources per service. |
+| `serviceAccounts.create` | `true` | Create Kubernetes `ServiceAccount` resources. |
+| `serviceAccounts.annotationsOnlyForCartservice` | `false` | Limit service account annotations to `cartservice` only. |
+| `cartDatabase.type` | `redis` | Cart backend type: `redis` or `spanner`. |
+| `cartDatabase.connectionString` | `redis-cart:6379` | Connection string for the cart database. |
+| `cartDatabase.inClusterRedis.create` | `true` | Deploy an in-cluster Redis instance. |
+| `googleCloudOperations.tracing` | `false` | Enable Cloud Trace. |
+| `googleCloudOperations.profiler` | `false` | Enable Cloud Profiler. |
+| `googleCloudOperations.metrics` | `false` | Enable Cloud Monitoring (Stats). |
+| `securityContext.enable` | `true` | Apply security contexts to all pods. |
+| `productCatalogService.extraLatency` | `""` | Add artificial latency to `productcatalogservice` requests. |
+
+## Uninstall
+
+```bash
+helm uninstall onlineboutique
+```
+
+If you installed into a dedicated namespace:
+
+```bash
+helm uninstall onlineboutique -n onlineboutique
+kubectl delete namespace onlineboutique
+```
